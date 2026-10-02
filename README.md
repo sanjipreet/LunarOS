@@ -5,5 +5,7 @@ Before you run make, make sure you have these packeges installed or it won't wor
 3. gcc and ld
 
 Feel free and have fun tinkering with my LunarOS!
+
 To run QEMU, just run: make run 
+
 To make the ISO, just run: make LunarOS.iso

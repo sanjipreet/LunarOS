@@ -4,4 +4,6 @@ Before you run make, make sure you have these packeges installed or it won't wor
 2. xorriso 
 3. gcc and ld
 
-Have fun tinkering with my LunarOS!
+Feel free and have fun tinkering with my LunarOS!
+To run qemu, just run: make run 
+To make the ISO, just run: make LunarOS.iso

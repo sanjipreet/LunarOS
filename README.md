@@ -9,3 +9,5 @@ Feel free and have fun tinkering with my LunarOS!
 To run QEMU, just run: make run 
 
 To make the ISO, just run: make LunarOS.iso
+
+To start GDB Debugger, just run: make debug

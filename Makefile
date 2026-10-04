@@ -9,7 +9,7 @@ NASMFLAGS = -f elf64 -g -F dwarf -i Kernel/ -Wall
 LDFLAGS = 	-m elf_x86_64 -nostdlib -static -z max-page-size=0x1000 \
         	-z noexecstack --gc-sections -T Configs/linker.lds -no-pie
 
-OBJ = Build/gdtFlush.o Build/gdt.o Build/kernel.o
+OBJ = Build/gdtFlush.o Build/gdt.o Build/printf.o Build/port.o Build/idtStubs.o Build/pic.o Build/idt.o Build/kernel.o
 
 Limine:
 	curl -fL -o limine-binary.tar.gz https://github.com/Limine-Bootloader/Limine/releases/latest/download/limine-binary.tar.gz

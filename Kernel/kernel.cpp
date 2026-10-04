@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <limine.h>
 #include <gdt.hpp>
+#include <printf.hpp>
+#include <idt.hpp>
 
 #define restrict __restrict
 
@@ -24,6 +26,10 @@ extern "C" {
 
     void kmain(void);
 }
+
+extern "C" void printf(const char* str);
+extern "C" void init_printf(struct limine_framebuffer* fb, uint32_t text_color, uint32_t background_color);
+extern "C" void remapPic();
 
 void *memcpy(void *restrict dest, const void *restrict src, size_t n)
 {
@@ -128,10 +134,9 @@ extern "C" void DrawBox(struct limine_framebuffer *fb, uint64_t startX, uint64_t
     }
 }
 
-
-// Move your memory arrays to the global scope to ensure absolute linker resolution!
 static uint8_t emergencyKernelStack[16384];
 static GlobalDescriptorTable kernelGDT;
+static InterruptDescriptorTable kernelIDT;
 
 void kmain(void)
 {
@@ -140,6 +145,11 @@ void kmain(void)
     uint64_t stackTop = reinterpret_cast<uint64_t>(emergencyKernelStack) + sizeof(emergencyKernelStack);
     kernelGDT.init(stackTop);
     kernelGDT.load();
+
+    kernelIDT.init();
+    kernelIDT.load();
+
+    remapPic();
 
     if (LIMINE_BASE_REVISION_SUPPORTED(LimineBaseRevision) == false)
     {
@@ -162,7 +172,14 @@ void kmain(void)
     }
 
     struct limine_framebuffer *fb = FramebufferRequest.response->framebuffers[0];
-    DrawBox(fb, 0, 0, fb->width, fb->height, 0, 0, 255); // Renders the beautiful solid color!
+    DrawBox(fb, 0, 0, fb->width, fb->height, 0, 0, 255);
+
+    init_printf(fb, 0xFFFFFFFF, 0x000000FF);
+    printf("Welcome to LunarOS Version 1.2!\n");
+    
+    asm volatile ("sti");
+    
+    asm volatile ("int $0x20");
 
     hcf();
 }

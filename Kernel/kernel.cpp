@@ -2,27 +2,33 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <limine.h>
+#include <gdt.hpp>
 
-__attribute__((used, section(".limine_requests")))
-static volatile uint64_t LimineBaseRevision[] = LIMINE_BASE_REVISION(6);
+#define restrict __restrict
 
-__attribute__((used, section(".limine_requests")))
-static volatile struct limine_framebuffer_request FramebufferRequest = {
-    .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
-    .revision = 0
-};
+extern "C" {
+    __attribute__((used, section(".limine_requests")))
+    static volatile uint64_t LimineBaseRevision[] = LIMINE_BASE_REVISION(6);
 
-__attribute__((used, section(".limine_requests_start")))
-static volatile uint64_t LimineRequestStartMaker[] = LIMINE_REQUESTS_START_MARKER;
+    __attribute__((used, section(".limine_requests")))
+    static volatile struct limine_framebuffer_request FramebufferRequest = {
+        .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+        .revision = 0
+    };
 
+    __attribute__((used, section(".limine_requests_start")))
+    static volatile uint64_t LimineRequestStartMaker[] = LIMINE_REQUESTS_START_MARKER;
 
-__attribute__((used, section(".limine_requests_end")))
-static volatile uint64_t LimineRequestEndMaker[] = LIMINE_REQUESTS_END_MARKER;
+    __attribute__((used, section(".limine_requests_end")))
+    static volatile uint64_t LimineRequestEndMaker[] = LIMINE_REQUESTS_END_MARKER;
+
+    void kmain(void);
+}
 
 void *memcpy(void *restrict dest, const void *restrict src, size_t n)
 {
-    uint8_t *pdest = dest;
-    const uint8_t *psrc = src;
+    uint8_t *pdest = (uint8_t *)dest;
+    const uint8_t *psrc = (const uint8_t *)src;
 
     for (size_t i = 0; i < n; i++)
     {
@@ -34,7 +40,7 @@ void *memcpy(void *restrict dest, const void *restrict src, size_t n)
 
 void *memset(void *s, int c, size_t n)
 {
-    uint8_t *p = s;
+    uint8_t *p = (uint8_t *)s;
 
     for (size_t i = 0; i < n; i++)
     {
@@ -46,8 +52,8 @@ void *memset(void *s, int c, size_t n)
 
 void *memmove(void *dest, const void *src, size_t n)
 {
-    uint8_t *pdest = dest;
-    const uint8_t *psrc = src;
+    uint8_t *pdest = (uint8_t *)dest;
+    const uint8_t *psrc = (const uint8_t *)src;
 
     if ((uintptr_t)src > (uintptr_t)dest)
     {
@@ -68,8 +74,8 @@ void *memmove(void *dest, const void *src, size_t n)
 
 int memcmp(const void *s1, const void *s2, size_t n)
 {
-    const uint8_t *p1 = s1;
-    const uint8_t *p2 = s2;
+    const uint8_t *p1 = (const uint8_t *)s1;
+    const uint8_t *p2 = (const uint8_t *)s2;
 
     for (size_t i = 0; i < n; i++)
     {
@@ -102,23 +108,39 @@ static uint32_t FramebufferPixel(struct limine_framebuffer *fb, uint8_t red, uin
          | FramebufferChannel(blue, fb->blue_mask_size, fb->blue_mask_shift);
 }
 
-static uint32_t FramebufferPattern(struct limine_framebuffer *fb)
+extern "C" void DrawBox(struct limine_framebuffer *fb, uint64_t startX, uint64_t startY, uint64_t width, uint64_t height, uint8_t r, uint8_t g, uint8_t b)
 {
-    volatile uint32_t *fbPtr = fb->address;
+    volatile uint32_t *fbPtr = (volatile uint32_t *)fb->address;
     
-    for(signed y = 0; y < fb->height; y++)
+    uint32_t color = FramebufferPixel(fb, r, g, b);
+    
+    uint64_t pitchPixels = fb->pitch / 4;
+
+    for (uint64_t y = startY; y < startY + height; y++)
     {
-        for (size_t x = 0; x < fb->width; x++)
+        if (y >= fb->height) break;
+
+        for (uint64_t x = startX; x < startX + width; x++)
         {
-            uint8_t nX = x * 255 / fb->width;
-            uint8_t nY = y * 255 / fb->height;
-            fbPtr[y * (fb->pitch / 4) + x] = FramebufferPixel(fb, 0, nY, nX);
+            if (x >= fb->width) break;
+            fbPtr[y * pitchPixels + x] = color;
         }
     }
 }
 
+
+// Move your memory arrays to the global scope to ensure absolute linker resolution!
+static uint8_t emergencyKernelStack[16384];
+static GlobalDescriptorTable kernelGDT;
+
 void kmain(void)
 {
+    asm volatile("cli"); 
+
+    uint64_t stackTop = reinterpret_cast<uint64_t>(emergencyKernelStack) + sizeof(emergencyKernelStack);
+    kernelGDT.init(stackTop);
+    kernelGDT.load();
+
     if (LIMINE_BASE_REVISION_SUPPORTED(LimineBaseRevision) == false)
     {
         hcf();
@@ -137,9 +159,10 @@ void kmain(void)
         {
             hcf();
         }
-
-        FramebufferPattern(Framebuffer);
     }
+
+    struct limine_framebuffer *fb = FramebufferRequest.response->framebuffers[0];
+    DrawBox(fb, 0, 0, fb->width, fb->height, 0, 0, 255); // Renders the beautiful solid color!
 
     hcf();
 }
